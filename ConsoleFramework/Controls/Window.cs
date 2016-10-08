@@ -43,8 +43,7 @@ namespace ConsoleFramework.Controls
         /// По клику мышки ищет конечный Focusable контрол, который размещён 
         /// на месте нажатия и устанавливает на нём фокус.
         /// </summary>
-        private void Window_OnPreviewMouseDown(object sender, MouseButtonEventArgs e)
-        {
+        private void Window_OnPreviewMouseDown(object sender, MouseButtonEventArgs e) {
             PassFocusToChildUnderPoint( e );
         }
 
@@ -74,9 +73,18 @@ namespace ConsoleFramework.Controls
             }
         }
 
+        private string title;
         public string Title {
-            get;
-            set;
+            get {
+                return title;
+            }
+            set {
+                if (title != value) {
+                    title = value;
+                    Invalidate();
+                    RaisePropertyChanged("Title");
+                }
+            }
         }
 
         protected WindowsHost getWindowsHost()
@@ -205,7 +213,7 @@ namespace ConsoleFramework.Controls
         private int resizingStartWidth;
         private int resizingStartHeight;
         private Point resizingStartPoint;
-
+        
         public void Window_OnMouseDown(object sender, MouseButtonEventArgs args) {
             // перемещение можно начинать только когда окно не ресайзится и наоборот
             if (!moving && !resizing && !closing) {

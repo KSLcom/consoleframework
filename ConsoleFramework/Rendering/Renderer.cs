@@ -91,14 +91,14 @@ namespace ConsoleFramework.Rendering
         /// </summary>
         public void FinallyApplyChangesToCanvas( bool forceRepaintAll = false ) {
             Rect affectedRect = Rect.Empty;
+
+            // Propagate updated rendered buffers to parent elements and eventually to Canvas
+            foreach (Control control in renderingUpdatedControls) {
+                Rect currentAffectedRect = applyChangesToCanvas(control, new Rect(new Point(0, 0), control.RenderSize));
+                affectedRect.Union(currentAffectedRect);
+            }
 			if ( forceRepaintAll ) {
 			    affectedRect = new Rect( rootElementRect.Size );
-			} else {
-                // Propagate updated rendered buffers to parent elements and eventually to Canvas
-			    foreach (Control control in renderingUpdatedControls) {
-                    Rect currentAffectedRect = applyChangesToCanvas(control, new Rect(new Point(0, 0), control.RenderSize));
-                    affectedRect.Union(currentAffectedRect);
-                }
 			}
 
             // Flush stored image (with this.RootElementRect offset)
@@ -310,6 +310,17 @@ namespace ConsoleFramework.Rendering
             }
         }
 
+        private bool checkDesiredSizeNotChangedRecursively( Control control ) {
+            if ( control.lastLayoutInfo.unclippedDesiredSize != control.layoutInfo.unclippedDesiredSize ) {
+                return false;
+            }
+            foreach ( Control child in control.Children ) {
+                if ( !checkDesiredSizeNotChangedRecursively( child ) )
+                    return false;
+            }
+            return true;
+        }
+
         private void updateLayout(Control control, List<Control> revalidatedControls) {
             LayoutInfo lastLayoutInfo = control.lastLayoutInfo;
             // работаем с родительским элементом управления
@@ -321,7 +332,8 @@ namespace ConsoleFramework.Rendering
                 // возвращаем управление
                 if (lastLayoutInfo.validity != LayoutValidity.Nothing) {
                     control.Measure(lastLayoutInfo.measureArgument);
-                    if (lastLayoutInfo.unclippedDesiredSize == control.layoutInfo.unclippedDesiredSize) {
+//                    if (lastLayoutInfo.unclippedDesiredSize == control.layoutInfo.unclippedDesiredSize) {
+                    if (checkDesiredSizeNotChangedRecursively(control)) {
                         needUpdateParentLayout = false;
                     }
                 }
@@ -397,6 +409,15 @@ namespace ConsoleFramework.Rendering
             renderingUpdatedControls.Add(control);
         }
 
+        private bool checkRenderingWasNotChangedRecursively( Control control ) {
+            if ( !control.lastLayoutInfo.Equals( control.layoutInfo ) 
+                || control.lastLayoutInfo.validity != LayoutValidity.Render ) return false;
+            foreach ( Control child in control.Children ) {
+                if ( !checkRenderingWasNotChangedRecursively( child ) ) return false;
+            }
+            return true;
+        }
+
         private RenderingBuffer processControl(Control control, List<Control> revalidatedControls) {
             RenderingBuffer buffer = getOrCreateBufferForControl(control);
             RenderingBuffer fullBuffer = getOrCreateFullBufferForControl(control);
@@ -407,7 +428,8 @@ namespace ConsoleFramework.Rendering
             control.Measure(lastLayoutInfo.measureArgument);
             control.Arrange(lastLayoutInfo.renderSlotRect);
             // if lastLayoutInfo eq layoutInfo we can use last rendered buffer
-            if (layoutInfo.Equals(lastLayoutInfo) && lastLayoutInfo.validity == LayoutValidity.Render) {
+//            if (layoutInfo.Equals(lastLayoutInfo) && lastLayoutInfo.validity == LayoutValidity.Render) {
+            if (checkRenderingWasNotChangedRecursively(control)) {
                 if (control.SetValidityToRender()) {
                     revalidatedControls.Add(control);
                 }
@@ -486,6 +508,12 @@ namespace ConsoleFramework.Rendering
         /// Это необходимо для определения контрола, который станет источником события мыши.
         /// </summary>
         internal int getControlOpacityAt( Control control, int x, int y ) {
+            // Если контрол, над которым водят мышью, имеет невидимых сыновей, которые ни разу
+            // не отрисовывались, то в словаре буферов для таких сыновей ничего не окажется.
+            // Возвращаем для таких детей 6 - как будто они полностью прозрачны
+            if ( !buffers.ContainsKey( control ) ) {
+                return 6;
+            }
             return buffers[ control ].GetOpacityAt( x, y );
         }
 

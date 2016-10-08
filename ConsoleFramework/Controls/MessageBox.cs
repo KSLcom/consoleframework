@@ -22,8 +22,8 @@ namespace ConsoleFramework.Controls
             button.Margin = new Thickness(4, 0, 4, 0);
             button.HorizontalAlignment = HorizontalAlignment.Center;
             button.Caption = "OK";
-            panel.AddChild( textBlock );
-            panel.AddChild( button );
+            panel.XChildren.Add( textBlock );
+            panel.XChildren.Add( button );
             panel.HorizontalAlignment = HorizontalAlignment.Center;
             panel.VerticalAlignment = VerticalAlignment.Bottom;
             this.Content = panel;
@@ -43,7 +43,9 @@ namespace ConsoleFramework.Controls
             messageBox.Title = title;
             messageBox.Text = text;
             messageBox.AddHandler( ClosedEvent, new EventHandler(( sender, args ) => {
-                onClosed(MessageBoxResult.Button1);
+                if ( null != onClosed ) {
+                    onClosed( MessageBoxResult.Button1 );
+                }
             }) );
             //messageBox.X =
             windowsHost.ShowModal( messageBox );

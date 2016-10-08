@@ -20,7 +20,7 @@ namespace ConsoleFramework.Controls
 
         protected override Size MeasureOverride(Size availableSize) {
             if (!string.IsNullOrEmpty(caption)) {
-                Size minButtonSize = new Size(caption.Length + 14, 2);
+                Size minButtonSize = new Size(caption.Length + 10, 2);
                 return minButtonSize;
             } else return new Size(8, 2);
         }
@@ -36,7 +36,7 @@ namespace ConsoleFramework.Controls
                     captionAttrs = Colors.Blend(Color.Black, Color.DarkGreen);
             }
 
-            if (pressed) {
+            if (pressed || pressedUsingKeyboard) {
                 buffer.FillRectangle(1, 0, ActualWidth - 1, ActualHeight - 1, ' ', captionAttrs);
                 buffer.SetOpacityRect(0, 0, 1, ActualHeight, 3);
                 buffer.FillRectangle(0, 0, 1, ActualHeight, ' ', captionAttrs);
@@ -54,10 +54,10 @@ namespace ConsoleFramework.Controls
                 }
                 buffer.SetPixel(0, ActualHeight-1, ' ');
                 buffer.SetOpacityRect(0, ActualHeight -1, ActualWidth, 1, 3);
-                buffer.FillRectangle(1, ActualHeight-1, ActualWidth - 1, 1, '\u2580', Attr.NO_ATTRIBUTES);
+                buffer.FillRectangle(1, ActualHeight-1, ActualWidth - 1, 1, UnicodeTable.UpperHalfBlock, Attr.NO_ATTRIBUTES);
                 buffer.SetOpacityRect(ActualWidth - 1, 0, 1, ActualHeight, 3);
-                buffer.FillRectangle(ActualWidth - 1, 1, 1, ActualHeight - 2, '\u2588', Attr.NO_ATTRIBUTES);
-                buffer.SetPixel(ActualWidth - 1, 0, '\u2584');
+                buffer.FillRectangle(ActualWidth - 1, 1, 1, ActualHeight - 2, UnicodeTable.FullBlock, Attr.NO_ATTRIBUTES);
+                buffer.SetPixel(ActualWidth - 1, 0, UnicodeTable.LowerHalfBlock);
             }
         }
     }

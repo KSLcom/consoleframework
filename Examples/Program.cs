@@ -74,13 +74,13 @@ namespace Examples
                 panel.Name = "panel1";
                 panel.HorizontalAlignment =  HorizontalAlignment.Center;
                 panel.VerticalAlignment = VerticalAlignment.Stretch;
-                panel.AddChild(new TextBlock() {
+                panel.XChildren.Add(new TextBlock() {
                     Name = "label1",
                     Text = "Label1",
                     Margin = new Thickness(1,2,1,0)
                     //,Visibility = Visibility.Collapsed
                 });
-                panel.AddChild(new TextBlock() {
+                panel.XChildren.Add(new TextBlock() {
                     Name = "label2",
                     Text = "Label2_____",
                     HorizontalAlignment = HorizontalAlignment.Right
@@ -124,10 +124,10 @@ namespace Examples
                 listbox.HorizontalAlignment = HorizontalAlignment.Stretch;
                 //listbox.Width = 10;
 
-                panel.AddChild(comboBox);
-                panel.AddChild(button);
-                panel.AddChild(textBox);
-                panel.AddChild( listbox );
+                panel.XChildren.Add(comboBox);
+                panel.XChildren.Add(button);
+                panel.XChildren.Add(textBox);
+                panel.XChildren.Add(listbox);
                 
                 //application.Run(panel);
                 WindowsHost windowsHost = new WindowsHost()
@@ -149,21 +149,32 @@ namespace Examples
                 groupBox.Title = "Группа";
                 ScrollViewer scrollViewer = new ScrollViewer(  );
                 ListBox listBox = new ListBox(  );
-                listBox.Items.Add( "Длинный элемент" );
-                listBox.Items.Add("Длинный элемент 2");
-                listBox.Items.Add("Длинный элемент 3");
-                listBox.Items.Add("Длинный элемент 4");
-                listBox.Items.Add("Длинный элемент 5");
-                listBox.Items.Add("Длинный элемент 6");
-                listBox.Items.Add("Длинный элемент 700");
+                for ( int i = 0; i < 30; i++ ) {
+                    listBox.Items.Add(string.Format("Длинный элемент {0}", i));
+                }
+//                listBox.Items.Add( "Длинный элемент" );
+//                listBox.Items.Add("Длинный элемент 2");
+//                listBox.Items.Add("Длинный элемент 3");
+//                listBox.Items.Add("Длинный элемент 4");
+//                listBox.Items.Add("Длинный элемент 5");
+//                listBox.Items.Add("Длинный элемент 6");
+//                listBox.Items.Add("Длинный элемент 700");
                 listBox.HorizontalAlignment = HorizontalAlignment.Stretch;
                 listBox.VerticalAlignment = VerticalAlignment.Stretch;
                 scrollViewer.Content = listBox;
 //                scrollViewer.HorizontalAlignment = HorizontalAlignment.Stretch;
                 scrollViewer.VerticalAlignment = VerticalAlignment.Stretch;
-                scrollViewer.HorizontalScrollEnabled = false;
+                scrollViewer.HorizontalScrollEnabled = true;
 
                 groupBox.Content = scrollViewer;
+
+                ComboBox combo = new ComboBox();
+                combo.ShownItemsCount = 10;
+                for ( int i = 0; i < 30; i++ ) {
+                    combo.Items.Add(string.Format("Длинный элемент {0}", i));
+                }
+//                groupBox.Content = combo;
+
                 groupBox.HorizontalAlignment = HorizontalAlignment.Stretch;
 
                 windowsHost.Show(new Window() {
@@ -171,6 +182,7 @@ namespace Examples
                     Y = 6,
                     //MinHeight = 10,
                     //MinWidth = 10,
+                    Height = 14,
                     Name = "LongTitleWindow",
                     Title = "Очень длинное название окна",
                     Content = groupBox

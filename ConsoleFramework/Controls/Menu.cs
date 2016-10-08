@@ -110,10 +110,15 @@ namespace ConsoleFramework.Controls
                         break;
                     }
                     case ListChangedEventType.ItemsRemoved:
-                        // todo : set ParentItem of removed items to null
+                        foreach (object removedItem in args.RemovedItems) {
+                            if (removedItem is MenuItem)
+                                (removedItem as MenuItem).ParentItem = null;
+                        }
                         break;
                     case ListChangedEventType.ItemReplaced: {
-                        // todo : set ParentItem of replaced item to null
+                        object removedItem = args.RemovedItems[0];
+                        if (removedItem is MenuItem)
+                            (removedItem as MenuItem).ParentItem = null;
 
                         MenuItemBase itemBase = items[args.Index];
                         if (itemBase is MenuItem) {
@@ -191,7 +196,7 @@ namespace ConsoleFramework.Controls
         public string TitleRight {
             get {
                 if ( titleRight == null && Type == MenuItemType.Submenu )
-                    return "\u25ba"; // ► todo : extract constant
+                    return new string(UnicodeTable.ArrowRight, 1);
                 return titleRight;
             }
             set { titleRight = value; }
@@ -312,7 +317,7 @@ namespace ConsoleFramework.Controls
             /// It is necessary before reuse MenuItems in another Popup instance.
             /// </summary>
             public void DisconnectMenuItems( ) {
-                panel.ClearChilds();
+                panel.XChildren.Clear();
             }
 
             /// <summary>
@@ -329,7 +334,7 @@ namespace ConsoleFramework.Controls
                 panel = new Panel();
                 panel.Orientation = Orientation.Vertical;
                 foreach (MenuItemBase item in menuItems) {
-                    panel.AddChild( item );
+                    panel.XChildren.Add( item );
                 }
                 Content = panel;
                 
@@ -396,19 +401,20 @@ namespace ConsoleFramework.Controls
 
                 // Первые width пикселей первой строки - прозрачные, но события мыши не пропускают
                 // По нажатию на них мы закрываем всплывающее окно вручную
-                buffer.SetOpacityRect(0, 0, parentItemWidth, 1, 2);
+                buffer.SetOpacityRect(0, 0, Math.Min( ActualWidth, parentItemWidth ), 1, 2);
                 // Оставшиеся пиксели первой строки - пропускают события мыши
                 // И WindowsHost закроет всплывающее окно автоматически при нажатии или
                 // перемещении нажатого курсора над этим местом
-                buffer.SetOpacityRect( parentItemWidth, 0, ActualWidth - parentItemWidth, 1, 6 );
+                if (ActualWidth > parentItemWidth)
+                    buffer.SetOpacityRect( parentItemWidth, 0, ActualWidth - parentItemWidth, 1, 6 );
 
                 if (shadow) {
                     buffer.SetOpacity(0, ActualHeight - 1, 2 + 4);
                     buffer.SetOpacity(ActualWidth - 1, 1, 2 + 4);
                     buffer.SetOpacityRect(ActualWidth - 1, 2, 1, ActualHeight - 2, 1 + 4);
-                    buffer.FillRectangle(ActualWidth - 1, 2, 1, ActualHeight - 2, '\u2588', borderAttrs);
+                    buffer.FillRectangle(ActualWidth - 1, 2, 1, ActualHeight - 2, UnicodeTable.FullBlock, borderAttrs);
                     buffer.SetOpacityRect(1, ActualHeight - 1, ActualWidth - 1, 1, 3 + 4);
-                    buffer.FillRectangle(1, ActualHeight - 1, ActualWidth - 1, 1, '\u2580',
+                    buffer.FillRectangle(1, ActualHeight - 1, ActualWidth - 1, 1, UnicodeTable.UpperHalfBlock,
                                           Attr.NO_ATTRIBUTES);
                 }
 

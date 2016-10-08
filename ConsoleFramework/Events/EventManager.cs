@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using ConsoleFramework.Controls;
 using ConsoleFramework.Core;
 using ConsoleFramework.Native;
@@ -189,6 +190,41 @@ namespace ConsoleFramework.Events {
 
         private Point lastMousePosition;
 
+        // Auto-repeating mouse left click when holding pressed button
+        private bool autoRepeatTimerRunning = false;
+        private Timer timer;
+        private MouseButtonEventArgs lastMousePressEventArgs;
+
+        private void startAutoRepeatTimer( MouseButtonEventArgs eventArgs ) {
+            lastMousePressEventArgs = eventArgs;
+            timer = new Timer( state => {
+                ConsoleApplication.Instance.RunOnUiThread( ( ) => {
+                    if (autoRepeatTimerRunning) {
+                        eventsQueue.Enqueue( new MouseButtonEventArgs(
+                            lastMousePressEventArgs.Source,
+                            Control.MouseDownEvent,
+                            lastMousePosition,
+                            lastMousePressEventArgs.LeftButton,
+                            lastMousePressEventArgs.MiddleButton,
+                            lastMousePressEventArgs.RightButton,
+                            MouseButton.Left,
+                            1,
+                            true
+                        ) );
+                    }
+                } );
+                // todo : make this constants configurable
+            }, null, TimeSpan.FromMilliseconds( 300 ), TimeSpan.FromMilliseconds(100) );
+            autoRepeatTimerRunning = true;
+        }
+
+        private void stopAutoRepeatTimer( ) {
+            timer.Dispose( );
+            timer = null;
+            autoRepeatTimerRunning = false;
+            lastMousePressEventArgs = null;
+        }
+
         public void ParseInputEvent(INPUT_RECORD inputRecord, Control rootElement) {
             if (inputRecord.EventType == EventType.MOUSE_EVENT) {
                 MOUSE_EVENT_RECORD mouseEvent = inputRecord.MouseEvent;
@@ -212,13 +248,18 @@ namespace ConsoleFramework.Events {
                     // вынуждены сохранять координаты, полученные при предыдущем событии мыши
                     rawPosition = lastMousePosition;
                 }
-                Control topMost = findSource(rawPosition, rootElement);
+
+                Control topMost = VisualTreeHelper.FindTopControlUnderMouse(rootElement,
+                    Control.TranslatePoint(null, rawPosition, rootElement));
 
                 // если мышь захвачена контролом, то события перемещения мыши доставляются только ему,
                 // события, связанные с нажатием мыши - тоже доставляются только ему, вместо того
                 // контрола, над которым событие было зарегистрировано. Такой механизм необходим,
                 // например, для корректной обработки перемещений окон (вверх или в стороны)
                 Control source = (inputCaptureStack.Count != 0) ? inputCaptureStack.Peek() : topMost;
+
+                // No sense to further process event with no source control
+                if ( source == null ) return;
                 
                 if (mouseEvent.dwEventFlags == MouseEventFlags.MOUSE_MOVED) {
                     MouseButtonState leftMouseButtonState = getLeftButtonState(mouseEvent.dwButtonState);
@@ -285,8 +326,9 @@ namespace ConsoleFramework.Events {
                     MouseButtonState middleMouseButtonState = getMiddleButtonState(mouseEvent.dwButtonState);
                     MouseButtonState rightMouseButtonState = getRightButtonState(mouseEvent.dwButtonState);
                     //
+                    MouseButtonEventArgs eventArgs = null;
                     if (leftMouseButtonState != lastLeftMouseButtonState) {
-                        MouseButtonEventArgs eventArgs = new MouseButtonEventArgs(source,
+                        eventArgs = new MouseButtonEventArgs(source,
                             leftMouseButtonState == MouseButtonState.Pressed ? Control.PreviewMouseDownEvent : Control.PreviewMouseUpEvent,
                             rawPosition,
                             leftMouseButtonState,
@@ -294,10 +336,9 @@ namespace ConsoleFramework.Events {
                             lastRightMouseButtonState,
                             MouseButton.Left
                             );
-                        eventsQueue.Enqueue(eventArgs);
                     }
                     if (middleMouseButtonState != lastMiddleMouseButtonState) {
-                        MouseButtonEventArgs eventArgs = new MouseButtonEventArgs(source,
+                        eventArgs = new MouseButtonEventArgs(source,
                             middleMouseButtonState == MouseButtonState.Pressed ? Control.PreviewMouseDownEvent : Control.PreviewMouseUpEvent,
                             rawPosition,
                             lastLeftMouseButtonState,
@@ -305,10 +346,9 @@ namespace ConsoleFramework.Events {
                             lastRightMouseButtonState,
                             MouseButton.Middle
                             );
-                        eventsQueue.Enqueue(eventArgs);
                     }
                     if (rightMouseButtonState != lastRightMouseButtonState) {
-                        MouseButtonEventArgs eventArgs = new MouseButtonEventArgs(source,
+                        eventArgs = new MouseButtonEventArgs(source,
                             rightMouseButtonState == MouseButtonState.Pressed ? Control.PreviewMouseDownEvent : Control.PreviewMouseUpEvent,
                             rawPosition,
                             lastLeftMouseButtonState,
@@ -316,12 +356,22 @@ namespace ConsoleFramework.Events {
                             rightMouseButtonState,
                             MouseButton.Right
                             );
-                        eventsQueue.Enqueue(eventArgs);
                     }
+                    if (eventArgs != null) eventsQueue.Enqueue(eventArgs);
                     //
                     lastLeftMouseButtonState = leftMouseButtonState;
                     lastMiddleMouseButtonState = middleMouseButtonState;
                     lastRightMouseButtonState = rightMouseButtonState;
+
+                    if ( leftMouseButtonState == MouseButtonState.Pressed ) {
+                        if ( eventArgs != null && !autoRepeatTimerRunning ) {
+                            startAutoRepeatTimer( eventArgs );
+                        }
+                    } else {
+                        if (eventArgs != null && autoRepeatTimerRunning) {
+                            stopAutoRepeatTimer( );
+                        }
+                    }
                 }
 
                 if (mouseEvent.dwEventFlags == MouseEventFlags.MOUSE_WHEELED) {
@@ -546,34 +596,6 @@ namespace ConsoleFramework.Events {
             }
 
             return args.Handled;
-        }
-
-        /// <summary>
-        /// Находит самый верхний элемент под указателем мыши с координатами rawPoint.
-        /// Учитывается прозрачность элементов - если пиксель, куда указывает мышь, отмечен как
-        /// прозрачный для событий мыши (opacity от 4 до 7), то они будут проходить насквозь,
-        /// к следующему контролу.
-        /// Так обрабатываются, например, тени окошек и прозрачные места контролов (первый столбец Combobox).
-        /// </summary>
-        /// <param name="rawPoint"></param>
-        /// <param name="control">RootElement для проверки всего визуального дерева.</param>
-        /// <returns></returns>
-        private Control findSource(Point rawPoint, Control control) {
-            if (control.Children.Count != 0) {
-                IList<Control> childrenOrderedByZIndex = control.GetChildrenOrderedByZIndex();
-                for (int i = childrenOrderedByZIndex.Count - 1; i >= 0; i--) {
-                    Control child = childrenOrderedByZIndex[i];
-                    if (Control.HitTest(rawPoint, control, child)) {
-                        Point childPoint = Control.TranslatePoint( null, rawPoint, child );
-                        int opacity = ConsoleApplication.Instance.Renderer.getControlOpacityAt( child, childPoint.X, childPoint.Y );
-                        if ( opacity >= 4 && opacity <= 7 ) {
-                            continue;
-                        }
-                        return findSource(rawPoint, child);
-                    }
-                }
-            }
-            return control;
         }
 
         /// <summary>

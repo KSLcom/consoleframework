@@ -1,22 +1,32 @@
-﻿<Window>
-  <TreeView>
-    <TreeView.Items>
-      <TreeItem Title="General">
-        <TreeItem Title="My"></TreeItem>
-        <TreeItem Title="Personal"></TreeItem>
-        <TreeItem Title="Stuff"></TreeItem>
-        <TreeItem Title="Panel"></TreeItem>
-      </TreeItem>
-      <TreeItem Title="Specific">
-        <TreeItem Title="More symbols"></TreeItem>
-        <TreeItem Title="No options"></TreeItem>
-        <TreeItem Title="End of all">
-          <TreeItem Title="More symbols"></TreeItem>
-          <TreeItem Title="No options"></TreeItem>
-          <TreeItem Title="More symbols"></TreeItem>
-          <TreeItem Title="No options"></TreeItem>
+﻿<Window Title="{Binding SelectedItemTitle, Mode=OneWay}">
+  <Panel Orientation="Horizontal">
+  <GroupBox Title="{Binding SelectedItemTitle, Mode=OneWay}" FitSizeToContent="true">
+    <TreeView Name="tree" SelectedItem="{Binding SelectedItem, Mode=OneWayToSource}">
+      <TreeView.Items>
+        <TreeItem Title="General" Disabled="True">
+          <TreeItem Title="My" Disabled="True"></TreeItem>
+          <TreeItem Title="Personal"></TreeItem>
+          <TreeItem Title="Stuff"></TreeItem>
+          <TreeItem Title="Panel"></TreeItem>
         </TreeItem>
-      </TreeItem>
-    </TreeView.Items>
-  </TreeView>
+        <TreeItem Title="Specific">
+          <TreeItem Title="More symbols 0"></TreeItem>
+          <TreeItem Title="No options 0"></TreeItem>
+          <TreeItem Title="End of all">
+            <TreeItem Title="More symbols 1" Disabled="True"></TreeItem>
+            <TreeItem Title="No options 1"></TreeItem>
+            <TreeItem Title="More symbols 2"></TreeItem>
+            <TreeItem Title="No options 2"></TreeItem>
+          </TreeItem>
+        </TreeItem>
+      </TreeView.Items>
+    </TreeView>
+  </GroupBox>
+  <Panel Orientation="Vertical">
+    <Button Command="{Binding RemoveCommand, Mode=OneTime}">Remove item</Button>
+    <Button Command="{Binding ExpandCollapseCommand, Mode=OneTime}">Expand / Collapse</Button>
+    <Button Command="{Binding ChangeTitleCommand, Mode=OneTime}">Change title</Button>
+  </Panel>
+<!--    <Button>sdfsf</Button>-->
+  </Panel>
 </Window>

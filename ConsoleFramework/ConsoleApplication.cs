@@ -62,8 +62,6 @@ namespace ConsoleFramework
             
             if ( maximized ) return;
             //
-            savedWindowRect = new Rect( new Point( Console.WindowLeft, Console.WindowTop ),
-                                        new Size( Console.WindowWidth, Console.WindowHeight ) );
             savedBufferSize = new Size(Console.BufferWidth, Console.BufferHeight);
             Win32.SendMessage(getConsoleWindowHwnd(), Win32.WM_SYSCOMMAND,
                 Win32.SC_MAXIMIZE, IntPtr.Zero);
@@ -72,7 +70,12 @@ namespace ConsoleFramework
             Console.SetWindowPosition( 0, 0 );
             Console.SetBufferSize(maxWidth, maxHeight);
             Console.SetWindowSize(maxWidth, maxHeight);
-            //
+
+            // Apply new sizes to Canvas
+            CanvasSize = new Size(maxWidth, maxHeight);
+            renderer.RootElementRect = new Rect(canvas.Size);
+            renderer.UpdateLayout();
+
             maximized = true;
         }
 
@@ -91,7 +94,6 @@ namespace ConsoleFramework
             Win32.SendMessage(getConsoleWindowHwnd(), Win32.WM_SYSCOMMAND, 
                 Win32.SC_RESTORE, IntPtr.Zero);
             Console.SetWindowPosition( 0, 0 );
-            Console.SetBufferSize( savedBufferSize.Width, savedBufferSize.Height );
 
             // Get largest size again - because resolution of screen can change
             // between maximize and restore calls
@@ -102,7 +104,19 @@ namespace ConsoleFramework
                 Math.Min( savedWindowRect.Width, maxWidth),
                 Math.Min(savedWindowRect.Height, maxHeight));
             Console.SetWindowPosition(savedWindowRect.Left, savedWindowRect.Top);
-            //
+
+            // Duo issue with console in Windows 10 Technical Preview (unexpected decreasing Console.BufferSize)
+            // we should take Max of window width. See https://github.com/elw00d/consoleframework/issues/21
+            Console.SetBufferSize(
+                Math.Max( savedBufferSize.Width, Console.WindowWidth ),
+                Math.Max( savedBufferSize.Height, Console.WindowHeight )
+            );
+
+            // Apply new sizes to Canvas
+            CanvasSize = new Size(savedWindowRect.Width, savedWindowRect.Height);
+            renderer.RootElementRect = new Rect(canvas.Size);
+            renderer.UpdateLayout();
+
             maximized = false;
         }
 
@@ -177,12 +191,15 @@ namespace ConsoleFramework
                 }
                 using ( StreamReader reader = new StreamReader( stream ) ) {
                     string result = reader.ReadToEnd( );
-                    return XamlParser.CreateFromXaml<Control>(result, dataContext, new List<string>()
+                    Control control = XamlParser.CreateFromXaml<Control>(result, dataContext, new List<string>()
                     {
                         "clr-namespace:Xaml;assembly=Xaml",
                         "clr-namespace:ConsoleFramework.Xaml;assembly=ConsoleFramework",
                         "clr-namespace:ConsoleFramework.Controls;assembly=ConsoleFramework",
                     });
+                    control.DataContext = dataContext;
+                    control.Created( );
+                    return control;
                 }
             }
         }
@@ -191,11 +208,16 @@ namespace ConsoleFramework
 		private static readonly bool isDarwin;
         private static readonly bool usingJsil;
 
+        public static bool IsRunningOnJsil() {
+            return Type.GetType("JSIL.Pointer") != null;
+        }
+
         static ConsoleApplication() {
-#if JSIL
-            usingJsil = true;
-            return;
-#endif
+            if (IsRunningOnJsil()) {
+                usingJsil = true;
+                return;
+            }
+
             switch (Environment.OSVersion.Platform)
             {
                 case PlatformID.Win32NT:
@@ -223,10 +245,11 @@ namespace ConsoleFramework
         private ConsoleApplication() {
             eventManager = new EventManager();
             focusManager = new FocusManager(eventManager);
-#if !JSIL
-            exitWaitHandle = new EventWaitHandle(false, EventResetMode.AutoReset);
-            invokeWaitHandle = new EventWaitHandle( false, EventResetMode.AutoReset );
-#endif
+
+            if (!usingJsil) {
+                exitWaitHandle = new EventWaitHandle(false, EventResetMode.AutoReset);
+                invokeWaitHandle = new EventWaitHandle(false, EventResetMode.AutoReset);
+            }
         }
 
         private static volatile ConsoleApplication instance;
@@ -700,10 +723,14 @@ namespace ConsoleFramework
 				inputRecord.MouseEvent.dwMousePosition = new COORD((short) (col - 1), (short) (line - 1));
 				if (ev == TermKeyMouseEvent.TERMKEY_MOUSE_RELEASE) {
 					inputRecord.MouseEvent.dwButtonState = 0;
-				} else if (ev == TermKeyMouseEvent.TERMKEY_MOUSE_DRAG) {
-					inputRecord.MouseEvent.dwButtonState = MOUSE_BUTTON_STATE.FROM_LEFT_1ST_BUTTON_PRESSED;
-				} else if (ev == TermKeyMouseEvent.TERMKEY_MOUSE_PRESS) {
-					inputRecord.MouseEvent.dwButtonState = MOUSE_BUTTON_STATE.FROM_LEFT_1ST_BUTTON_PRESSED;
+				} else if (ev == TermKeyMouseEvent.TERMKEY_MOUSE_DRAG || ev == TermKeyMouseEvent.TERMKEY_MOUSE_PRESS) {
+					if (1 == button) {
+						inputRecord.MouseEvent.dwButtonState = MOUSE_BUTTON_STATE.FROM_LEFT_1ST_BUTTON_PRESSED;
+					} else if (2 == button) {
+						inputRecord.MouseEvent.dwButtonState = MOUSE_BUTTON_STATE.FROM_LEFT_2ND_BUTTON_PRESSED;
+					} else if (3 == button) {
+						inputRecord.MouseEvent.dwButtonState = MOUSE_BUTTON_STATE.RIGHTMOST_BUTTON_PRESSED;
+					}
 				}
 				//
 				processInputEvent(inputRecord);
@@ -732,10 +759,16 @@ namespace ConsoleFramework
             CONSOLE_SCREEN_BUFFER_INFO screenBufferInfo;
             Win32.GetConsoleScreenBufferInfo( stdOutputHandle, out screenBufferInfo );
 
+            // Set Canvas size to current console window size (not to whole buffer size)
+            savedWindowRect = new Rect( new Point( Console.WindowLeft, Console.WindowTop ),
+                                        new Size( Console.WindowWidth, Console.WindowHeight ) );
+            CanvasSize = new Size(savedWindowRect.Width, savedWindowRect.Height);
+
             canvas = userCanvasSize.IsEmpty 
                 ? new PhysicalCanvas( screenBufferInfo.dwSize.X, screenBufferInfo.dwSize.Y, stdOutputHandle ) 
                 : new PhysicalCanvas( userCanvasSize.Width, userCanvasSize.Height, stdOutputHandle);
             renderer.Canvas = canvas;
+
             // Fill the canvas by default
             renderer.RootElementRect = userRootElementRect.IsEmpty 
                 ? new Rect( new Point(0, 0), canvas.Size ) : userRootElementRect;
@@ -747,6 +780,7 @@ namespace ConsoleFramework
 
             // Initially hide the console cursor
             HideCursor();
+            
             
 			this.running = true;
 			this.mainThreadId = Thread.CurrentThread.ManagedThreadId;
@@ -777,6 +811,10 @@ namespace ConsoleFramework
                             Maximize();
                         else
                             Restore();
+                    }
+                    if ( !maximized ) {
+                        savedWindowRect = new Rect( new Point( Console.WindowLeft, Console.WindowTop ),
+                                                    new Size( Console.WindowWidth, Console.WindowHeight ) );
                     }
                 }
                 // WAIT_FAILED
@@ -923,7 +961,6 @@ namespace ConsoleFramework
         /// Invokes action in main loop thread asynchronously.
         /// If run loop was not started yet, nothing will be done.
         /// </summary>
-        /// <param name="action"></param>
         public void Post( Action action ) {
             // If run loop is not started, nothing to do
             if ( !this.running ) {
@@ -939,6 +976,32 @@ namespace ConsoleFramework
                 	invokeWaitHandle.Set();
 				}
 			}
+        }
+
+        private readonly object timersLock = new object(  );
+
+        /// <summary>
+        /// This structure is required to avoid active timer to be collected by GC
+        /// before action execution.
+        /// </summary>
+        private readonly List<Timer> activeTimers = new List< Timer >();
+
+        /// <summary>
+        /// Invokes action in main loop thread (UI thread) asynchronously and after delay.
+        /// If run loop will not start to delayed time, nothing will be done.
+        /// </summary>
+        public void Post( Action action, TimeSpan delay ) {
+            lock ( timersLock ) {
+                Timer[] array = new Timer[1];
+                Timer timer = new Timer( state => {
+                    this.Post( action );
+                    lock ( timersLock ) {
+                        activeTimers.Remove( array[ 0 ] );
+                    }
+                }, null, delay, TimeSpan.FromMilliseconds( -1 ) );
+                array[ 0 ] = timer;
+                activeTimers.Add( timer );
+            }
         }
 
         /// <summary>
